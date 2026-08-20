@@ -7,7 +7,7 @@
     <ChatInterface v-if="page === 'chat-interface'" :initialMessages="messages" @manage-models="handleManageModels"
       @open-configuration="handleOpenConfiguration" />
     <Configuration v-model:visible="showConfiguration" :reactivePage="configurationPage" @close="closeConfiguration" />
-    <Dialog modal :visible="showOnboarding" :closable="false" :draggable="false">
+    <Dialog modal :visible="showOnboarding" :closable="false" :draggable="false" :contentStyle="{ 'max-height': '70vh', 'overflow-y': 'auto' }">
       <OnboardingScreen @submit="closeOnboardingScreen" />
     </Dialog>
   </div>
@@ -91,10 +91,11 @@ export default {
     ...mapActions(useConfigurationStore, ["configure"]),
     ...mapActions(useInternalDataStore, ["setInternal"]),
     ...mapActions(useChatStore, ["initialize"]),
-    closeOnboardingScreen() {
+    async closeOnboardingScreen() {
       this.showOnboarding = false;
       this.page = "chat-interface";
       this.setInternal("isFirstTimeUser", false);
+      await this.initialize();
     },
     handleManageModels() {
       this.configurationPage = "models";

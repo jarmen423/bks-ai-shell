@@ -36,7 +36,7 @@
     Use custom instructions to provide additional context to the AI. These
     instructions are added on top of the
     <ExternalLink
-      href="https://github.com/beekeeper-studio/bks-ai-shell/blob/main/instructions"
+      href="https://github.com/jarmen423/bks-ai-shell/blob/main/instructions"
       >default instructions<span
         style="font-size: 1em"
         class="material-symbols-outlined"

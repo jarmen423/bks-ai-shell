@@ -278,6 +278,9 @@ export const useChatStore = defineStore("chat", {
 
       this.viewContext = markRaw(await getViewContext());
 
+      await this.syncProvider("openaiCompat");
+      await this.syncProvider("ollama");
+
       this.model = (
         this.models.find(
           (m) => m.id === internal.lastUsedModelId && m.enabled,
@@ -285,9 +288,6 @@ export const useChatStore = defineStore("chat", {
       ) as Model | undefined;
 
       internal.lastUsedModelId = this.model?.id;
-
-      this.syncProvider("openaiCompat");
-      this.syncProvider("ollama");
       getDefaultInstructions()
         .then((instructions) => {
           this.defaultInstructions = instructions;
@@ -324,29 +324,11 @@ export const useChatStore = defineStore("chat", {
           this.errors.splice(errorIdx, 1);
         }
 
-        // Get old models before fetching new ones
-        const oldModels = config.getModelsByProvider(provider) || [];
-
         // Fetch new models
         const newModels = await createProvider(provider).listModels();
 
-        // Find which models are actually NEW (not in old list)
-        const newModelIds = newModels
-          .filter(
-            (newModel) => !oldModels.some((old) => old.id === newModel.id),
-          )
-          .map((m) => m.id);
-
         // Update the model list first
         await config.setModels(provider, newModels);
-
-        // Disable ONLY the new models
-        await config.disableModels(
-          newModelIds.map((modelId) => ({
-            modelId,
-            providerId: provider,
-          })),
-        );
       } catch (e) {
         if (
           provider === "ollama" &&

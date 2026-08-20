@@ -31,32 +31,41 @@ export class OpenAICompatibleProvider extends BaseProvider {
   }
 
   async listModels(): Promise<ModelInfo[]> {
+    const desiredModelId = "muse-spark-1.2-contributor";
     const url = new URL("models", this.options.baseURL);
 
-    const res = await fetch(url.toString(), {
-      headers: this.buildFetchHeaders(),
-    });
-    if (!res.ok) {
-      throw new Error(`Failed to list models: ${res.statusText}`);
-    }
-    const data = await res.json();
-    if (data.error) {
-      throw new Error(`Failed to list models: ${data.error}`);
-    }
-    if (!Array.isArray(data.data)) {
-      // use log.warn from @beekeeperstudio/plugin
-      console.warn("Provider returns invalid data", this.options.baseURL, data);
-      return [];
-    }
+    let fetchedModels: ModelInfo[] = [];
     try {
-      return (data.data as any[]).map<ModelInfo>((m) => ({
-        id: m.id,
-        displayName: m.name ?? m.id,
-        contextWindow: m.context_length,
-      }));
+      const res = await fetch(url.toString(), {
+        headers: this.buildFetchHeaders(),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to list models: ${res.statusText}`);
+      }
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(`Failed to list models: ${data.error}`);
+      }
+      if (Array.isArray(data.data)) {
+        fetchedModels = (data.data as any[]).map<ModelInfo>((m) => ({
+          id: m.id,
+          displayName: m.name ?? m.id,
+          contextWindow: m.context_length,
+        }));
+      }
     } catch (e) {
-      throw new Error(`Failed to list models: ${e}`);
+      // use log.warn from @beekeeperstudio/plugin
+      console.warn("Failed to fetch model list", this.options.baseURL, e);
     }
+
+    if (!fetchedModels.some((m) => m.id === desiredModelId)) {
+      fetchedModels.push({
+        id: desiredModelId,
+        displayName: desiredModelId,
+      });
+    }
+
+    return fetchedModels;
   }
 
   protected buildFetchHeaders(): Record<string, string> {

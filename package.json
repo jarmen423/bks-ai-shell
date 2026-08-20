@@ -1,11 +1,11 @@
 {
-  "name": "@beekeeperstudio/bks-ai-shell",
+  "name": "ai-shell-jf",
   "version": "3.3.2",
-  "description": "A Beekeeper Studio plugin for analyzing database and generate queries",
+  "description": "A Beekeeper Studio plugin for analyzing database and generate queries (forked community build)",
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/beekeeper-studio/bks-ai-shell.git"
+    "url": "git+https://github.com/jarmen423/bks-ai-shell.git"
   },
   "type": "module",
   "main": "dist/main.js",

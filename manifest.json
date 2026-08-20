@@ -1,12 +1,12 @@
 {
-  "id": "bks-ai-shell",
-  "name": "AI Shell",
+  "id": "ai-shell-jf",
+  "name": "AI Shell (JF fork)",
   "version": "3.3.2",
   "minAppVersion": "5.4.0",
   "description": "Ask AI to analyze your database and generate SQL queries.",
   "author": {
-    "name": "Beekeeper Studio",
-    "url": "https://beekeeperstudio.io"
+    "name": "JFriedman",
+    "url": "https://github.com/jarmen423"
   },
   "icon": "auto_awesome",
   "manifestVersion": 0,
@@ -14,8 +14,8 @@
     "views": {
       "tabTypes": [
         {
-          "id": "bks-ai-shell",
-          "name": "AI Shell",
+          "id": "ai-shell-jf",
+          "name": "AI Shell (JF fork)",
           "kind": "shell",
           "entry": "dist/index.html"
         }
@@ -24,9 +24,9 @@
     "menu": [
       {
         "command": "new-tab-dropdown-item",
-        "name": "Add AI Shell",
+        "name": "Add AI Shell (JF fork)",
         "description": "Open a new AI Shell tab.",
-        "view": "bks-ai-shell",
+        "view": "ai-shell-jf",
         "placement": "newTabDropdown"
       }
     ]

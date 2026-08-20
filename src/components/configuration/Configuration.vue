@@ -24,6 +24,13 @@
   </Dialog>
 </template>
 
+<style scoped>
+.content {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+</style>
+
 <script lang="ts">
 import ModelsConfiguration from "@/components/configuration/ModelsConfiguration.vue";
 import ProvidersConfiguration from "@/components/configuration/ProvidersConfiguration.vue";
