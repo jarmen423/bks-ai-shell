@@ -150,7 +150,7 @@ export default {
     const config = useConfigurationStore();
 
     return {
-      selectedProvider: "" as AvailableProviders,
+      selectedProvider: "openaiCompat" as AvailableProviders,
       openaiApiKey: config["providers.openai.apiKey"],
       anthropicApiKey: config["providers.anthropic.apiKey"],
       googleApiKey: config["providers.google.apiKey"],

@@ -89,7 +89,7 @@ const defaultConfiguration: ConfigurationState = {
   "providers.google.apiKey": "",
   "providers.zai.apiKey": "",
   "providers.deepseek.apiKey": "",
-  providers_openaiCompat_baseUrl: "",
+  providers_openaiCompat_baseUrl: "https://api.meta.ai/v1",
   providers_openaiCompat_apiKey: "",
   providers_openaiCompat_headers: "",
   providers_ollama_baseUrl: "http://localhost:11434",
