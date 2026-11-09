@@ -232,10 +232,13 @@ export const useConfigurationStore = defineStore("configuration", {
 
     async setModels(providerId: ProviderId, models: Model[]) {
       if (providerId.startsWith("custom-")) {
-        await this.configure("customProviderModels", {
-          ...this.customProviderModels,
-          [providerId]: models,
-        });
+        await this.configure(
+          "customProviderModels",
+          _.cloneDeep({
+            ...this.customProviderModels,
+            [providerId]: models,
+          }),
+        );
         return;
       }
       await this.configure(
@@ -260,10 +263,10 @@ export const useConfigurationStore = defineStore("configuration", {
         baseUrl: options.baseUrl,
         headers: options.headers ?? "",
       };
-      await this.configure("customProviders", [
-        ...this.customProviders,
-        provider,
-      ]);
+      await this.configure(
+        "customProviders",
+        _.cloneDeep([...this.customProviders, provider]),
+      );
       return provider;
     },
 
@@ -273,8 +276,10 @@ export const useConfigurationStore = defineStore("configuration", {
     ) {
       await this.configure(
         "customProviders",
-        this.customProviders.map((cp) =>
-          cp.id === providerId ? { ...cp, ...patch } : cp,
+        _.cloneDeep(
+          this.customProviders.map((cp) =>
+            cp.id === providerId ? { ...cp, ...patch } : cp,
+          ),
         ),
       );
     },
@@ -282,7 +287,7 @@ export const useConfigurationStore = defineStore("configuration", {
     async removeCustomProvider(providerId: `custom-${string}`) {
       await this.configure(
         "customProviders",
-        this.customProviders.filter((cp) => cp.id !== providerId),
+        _.cloneDeep(this.customProviders.filter((cp) => cp.id !== providerId)),
       );
       const customProviderModels = _.omit(this.customProviderModels, [
         providerId,
@@ -290,24 +295,37 @@ export const useConfigurationStore = defineStore("configuration", {
       const customProviderApiKeys = _.omit(this.customProviderApiKeys, [
         providerId,
       ]);
-      await this.configure("customProviderModels", customProviderModels);
-      await this.configure("customProviderApiKeys", customProviderApiKeys);
-      await this.configure("disabledModels", [
-        ...this.disabledModels.filter((m) => m.providerId !== providerId),
-      ]);
-      await this.configure("removedModels", [
-        ...this.removedModels.filter((m) => m.providerId !== providerId),
-      ]);
+      await this.configure(
+        "customProviderModels",
+        _.cloneDeep(customProviderModels),
+      );
+      await this.configure(
+        "customProviderApiKeys",
+        _.cloneDeep(customProviderApiKeys),
+      );
+      // cloneDeep: store entries are reactive proxies the host's
+      // postMessage structured-clone cannot serialize
+      await this.configure(
+        "disabledModels",
+        _.cloneDeep(this.disabledModels.filter((m) => m.providerId !== providerId)),
+      );
+      await this.configure(
+        "removedModels",
+        _.cloneDeep(this.removedModels.filter((m) => m.providerId !== providerId)),
+      );
     },
 
     async setCustomProviderApiKey(
       providerId: `custom-${string}`,
       apiKey: string,
     ) {
-      await this.configure("customProviderApiKeys", {
-        ...this.customProviderApiKeys,
-        [providerId]: apiKey,
-      });
+      await this.configure(
+        "customProviderApiKeys",
+        _.cloneDeep({
+          ...this.customProviderApiKeys,
+          [providerId]: apiKey,
+        }),
+      );
     },
 
     async addModel(options: {

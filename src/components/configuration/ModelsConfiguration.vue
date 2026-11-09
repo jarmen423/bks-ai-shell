@@ -53,7 +53,7 @@
     <ul class="model-list">
       <li
         v-for="model in filteredModels"
-        :key="model.id"
+        :key="`${model.provider}:${model.id}`"
         class="model"
         :class="{ available: model.available }"
       >
