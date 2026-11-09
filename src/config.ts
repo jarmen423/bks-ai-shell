@@ -2,6 +2,18 @@ export const defaultTemperature = 0.7;
 
 export type AvailableProviders = keyof typeof providerConfigs;
 
+/** Custom OpenAI-compatible endpoints get ids like `custom-<slug>-<rand>`. */
+export type ProviderId = AvailableProviders | `custom-${string}`;
+
+export type CustomProviderConfig = {
+  id: `custom-${string}`;
+  /** User-facing name shown in the model picker and provider filter. */
+  name: string;
+  baseUrl: string;
+  /** One `Header-Name: value` per line, same format as the built-in slot. */
+  headers: string;
+};
+
 export type AvailableProvidersWithDynamicModels = {
   [K in keyof typeof providerConfigs]: 'supportsRuntimeModels' extends keyof typeof providerConfigs[K]
     ? typeof providerConfigs[K]['supportsRuntimeModels'] extends true
@@ -9,6 +21,22 @@ export type AvailableProvidersWithDynamicModels = {
       : never
     : never;
 }[keyof typeof providerConfigs];
+
+/** Display name for any provider id, including runtime-registered custom endpoints. */
+export function getProviderDisplayName(
+  providerId: ProviderId,
+  customProviders: CustomProviderConfig[] = [],
+): string {
+  const builtin = (providerConfigs as Record<string, { displayName: string }>)[
+    providerId as string
+  ];
+  if (builtin) {
+    return builtin.displayName;
+  }
+  return (
+    customProviders.find((cp) => cp.id === providerId)?.name ?? providerId
+  );
+}
 
 export type AvailableModels<T extends AvailableProviders | unknown = unknown> =
   T extends AvailableProviders
@@ -111,7 +139,8 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
     ],
-    supportsRuntimeModels: false,
+    /** Fallback list; the live model list is fetched from the Anthropic API. */
+    supportsRuntimeModels: true,
   },
   google: {
     displayName: "Google",
@@ -190,7 +219,8 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
     ],
-    supportsRuntimeModels: false,
+    /** Fallback list; the live model list is fetched from the Gemini API. */
+    supportsRuntimeModels: true,
   },
   zai: {
     displayName: "Z.AI (GLM)",
@@ -245,7 +275,8 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
     ],
-    supportsRuntimeModels: false,
+    /** Fallback list; the live model list is fetched from the Z.AI API. */
+    supportsRuntimeModels: true,
   },
   openai: {
     displayName: "OpenAI",
@@ -408,7 +439,8 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
     ],
-    supportsRuntimeModels: false,
+    /** Fallback list; the live model list is fetched from the OpenAI API. */
+    supportsRuntimeModels: true,
   },
   deepseek: {
     displayName: "DeepSeek",
@@ -427,7 +459,14 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
     ],
-    supportsRuntimeModels: false,
+    /** Fallback list; the live model list is fetched from the DeepSeek API. */
+    supportsRuntimeModels: true,
+  },
+  openrouter: {
+    displayName: "OpenRouter",
+    /** Models are fetched at runtime from https://openrouter.ai/api/v1/models */
+    models: [],
+    supportsRuntimeModels: true,
   },
   openaiCompat: {
     displayName: "OpenAI-Compatible",

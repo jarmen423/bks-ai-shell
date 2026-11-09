@@ -18,7 +18,6 @@
         </select>
         <button
           @click="refreshModels"
-          v-show="supportsRuntimeModels"
           class="btn btn-flat"
           :disabled="disableRefreshModelsBtn"
         >
@@ -27,19 +26,9 @@
         </button>
       </div>
     </div>
-    <template v-if="filterByProvider === 'openaiCompat'">
+    <template v-if="filterByProvider !== 'all'">
       <div
-        v-for="(error, index) in openAiCompatibleErrors"
-        :key="index"
-        class="alert alert-danger"
-      >
-        <span class="material-symbols-outlined">error_outline</span>
-        <span>{{ error }}</span>
-      </div>
-    </template>
-    <template v-if="filterByProvider === 'ollama'">
-      <div
-        v-for="(error, index) in ollamaErrors"
+        v-for="(error, index) in providerErrors"
         :key="index"
         class="alert alert-danger"
       >
@@ -102,7 +91,7 @@
 <script lang="ts">
 import {
   type AvailableProviders,
-  type AvailableProvidersWithDynamicModels,
+  type ProviderId,
   providerConfigs,
 } from "@/config";
 import Switch from "@/components/common/Switch.vue";
@@ -128,15 +117,19 @@ export default {
   data() {
     return {
       filter: "",
-      filterByProvider: "all" as "all" | AvailableProviders,
-      syncingProviders: [] as AvailableProvidersWithDynamicModels[],
+      filterByProvider: "all" as "all" | ProviderId,
+      syncingProviders: [] as ProviderId[],
+      syncingAll: false,
     };
   },
 
   computed: {
     ...mapState(useChatStore, ["models", "errors"]),
     ...mapWritableState(useChatStore, ["model"]),
-    ...mapState(useConfigurationStore, ["disabledModels"]),
+    ...mapState(useConfigurationStore, [
+      "disabledModels",
+      "customProviders",
+    ]),
     sortedModels() {
       // Enabled models first
       return this.models.sort((a, b) => {
@@ -175,40 +168,37 @@ export default {
           label: providerConfigs[provider].displayName,
           value: provider,
         })),
+        ...this.customProviders.map((cp) => ({
+          label: cp.name,
+          value: cp.id,
+        })),
       ];
     },
     supportsRuntimeModels() {
       return providerSupportsRuntimeModels(this.filterByProvider);
     },
     disableRefreshModelsBtn() {
+      if (this.syncingAll) {
+        return true;
+      }
       return (
         this.filterByProvider !== "all" &&
-        this.syncingProviders.includes(this.filterByProvider as AvailableProvidersWithDynamicModels)
+        this.syncingProviders.includes(this.filterByProvider)
       );
     },
-    // FIXME: Duplicated from ProvidersConfiguration
-    openAiCompatibleErrors() {
+    providerErrors() {
       return this.errors
         .filter(
           (error) =>
-            error.providerId === "openaiCompat" &&
+            error.providerId === this.filterByProvider &&
             !error.message.includes("[2]"),
-        )
-        .map((error) => error.message);
-    },
-    // FIXME: Duplicated from ProvidersConfiguration
-    ollamaErrors() {
-      return this.errors
-        .filter(
-          (error) =>
-            error.providerId === "ollama" && !error.message.includes("[2]"),
         )
         .map((error) => error.message);
     },
   },
 
   methods: {
-    ...mapActions(useChatStore, ["syncProvider"]),
+    ...mapActions(useChatStore, ["syncProvider", "syncAllProviders"]),
     ...mapActions(useConfigurationStore, [
       "configure",
       "removeModel",
@@ -240,6 +230,13 @@ export default {
     },
     refreshModels() {
       const filterByProvider = this.filterByProvider;
+      if (filterByProvider === "all") {
+        this.syncingAll = true;
+        this.syncAllProviders().finally(() => {
+          this.syncingAll = false;
+        });
+        return;
+      }
       if (providerSupportsRuntimeModels(filterByProvider)) {
         this.syncingProviders.push(filterByProvider);
         this.syncProvider(filterByProvider).finally(() => {

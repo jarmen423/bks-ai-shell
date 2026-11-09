@@ -1,6 +1,10 @@
-import type { AvailableProviders, ModelInfo } from "@/config";
+import type { ModelInfo, ProviderId } from "@/config";
 import { BaseProvider } from "@/providers/BaseProvider";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+
+/** Always offered on the built-in slot, even when the endpoint's /models
+ * endpoint does not list it. */
+const MUSE_MODEL_ID = "muse-spark-1.2-contributor";
 
 export class OpenAICompatibleProvider extends BaseProvider {
   constructor(
@@ -9,6 +13,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
       headers: Record<string, string>;
       apiKey: string;
       name?: string;
+      /** Overrides the provider id so custom endpoints report their own id. */
+      providerId?: ProviderId;
     },
   ) {
     super();
@@ -17,8 +23,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
       : this.options.baseURL + "/";
   }
 
-  get providerId(): AvailableProviders {
-    return "openaiCompat";
+  get providerId(): ProviderId {
+    return this.options.providerId ?? "openaiCompat";
   }
 
   getModel(id: string) {
@@ -26,12 +32,11 @@ export class OpenAICompatibleProvider extends BaseProvider {
       baseURL: this.options.baseURL,
       apiKey: this.options.apiKey,
       headers: this.options.headers,
-      name: "OpenAI Compatible (AI Shell)",
+      name: this.options.name ?? "OpenAI Compatible (AI Shell)",
     }).languageModel(id);
   }
 
   async listModels(): Promise<ModelInfo[]> {
-    const desiredModelId = "muse-spark-1.2-contributor";
     const url = new URL("models", this.options.baseURL);
 
     let fetchedModels: ModelInfo[] = [];
@@ -52,16 +57,22 @@ export class OpenAICompatibleProvider extends BaseProvider {
           displayName: m.name ?? m.id,
           contextWindow: m.context_length,
         }));
+      } else {
+        // use log.warn from @beekeeperstudio/plugin
+        console.warn("Provider returns invalid data", this.options.baseURL, data);
       }
     } catch (e) {
       // use log.warn from @beekeeperstudio/plugin
       console.warn("Failed to fetch model list", this.options.baseURL, e);
     }
 
-    if (!fetchedModels.some((m) => m.id === desiredModelId)) {
+    if (
+      this.providerId === "openaiCompat" &&
+      !fetchedModels.some((m) => m.id === MUSE_MODEL_ID)
+    ) {
       fetchedModels.push({
-        id: desiredModelId,
-        displayName: desiredModelId,
+        id: MUSE_MODEL_ID,
+        displayName: MUSE_MODEL_ID,
       });
     }
 
