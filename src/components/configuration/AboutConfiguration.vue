@@ -4,7 +4,7 @@
     AI Shell<br />
     Version {{ version }}<br />
     <ExternalLink
-      href="https://github.com/beekeeper-studio/bks-ai-shell"
+      href="https://github.com/jarmen423/bks-ai-shell"
       class="github-link"
     >
       View on GitHub </ExternalLink

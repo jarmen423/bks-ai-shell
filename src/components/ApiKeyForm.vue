@@ -22,6 +22,7 @@
       type="password"
       placeholder="sk-proj-..."
       v-model="openaiApiKey"
+      @change="syncProvider('openai')"
     >
       <template #label>
         {{ dropdownBased ? "API Key" : providerConfigs["openai"].displayName }}
@@ -38,6 +39,7 @@
       type="password"
       placeholder="sk-ant-..."
       v-model="anthropicApiKey"
+      @change="syncProvider('anthropic')"
     >
       <template #label>
         {{
@@ -56,6 +58,7 @@
       type="password"
       placeholder="AIzaSy..."
       v-model="googleApiKey"
+      @change="syncProvider('google')"
     >
       <template #label>
         {{ dropdownBased ? "API Key" : providerConfigs["google"].displayName }}
@@ -72,6 +75,7 @@
       type="password"
       placeholder="sk-..."
       v-model="zaiApiKey"
+      @change="syncProvider('zai')"
     >
       <template #label>
         {{ dropdownBased ? "API Key" : providerConfigs["zai"].displayName }}
@@ -88,6 +92,7 @@
       type="password"
       placeholder="sk-..."
       v-model="deepseekApiKey"
+      @change="syncProvider('deepseek')"
     >
       <template #label>
         {{ dropdownBased ? "API Key" : providerConfigs["deepseek"].displayName }}
@@ -95,6 +100,23 @@
       <template #helper>
         Get your
         <ExternalLink href="https://platform.deepseek.com/api_keys">
+          API Key here.
+        </ExternalLink>
+      </template>
+    </BaseInput>
+    <BaseInput
+      v-if="!dropdownBased || selectedProvider === 'openrouter'"
+      type="password"
+      placeholder="sk-or-..."
+      v-model="openrouterApiKey"
+      @change="syncProvider('openrouter')"
+    >
+      <template #label>
+        {{ dropdownBased ? "API Key" : providerConfigs["openrouter"].displayName }}
+      </template>
+      <template #helper>
+        Get your
+        <ExternalLink href="https://openrouter.ai/settings/keys">
           API Key here.
         </ExternalLink>
       </template>
@@ -128,6 +150,7 @@
 <script lang="ts">
 import { mapActions } from "pinia";
 import { useConfigurationStore } from "@/stores/configuration";
+import { useChatStore } from "@/stores/chat";
 import { type AvailableProviders, providerConfigs } from "@/config";
 import BaseInput from "./common/BaseInput.vue";
 import ExternalLink from "./common/ExternalLink.vue";
@@ -150,7 +173,7 @@ export default {
     const config = useConfigurationStore();
 
     return {
-      selectedProvider: "" as AvailableProviders,
+      selectedProvider: "openaiCompat" as AvailableProviders,
       openaiApiKey: config["providers.openai.apiKey"],
       anthropicApiKey: config["providers.anthropic.apiKey"],
       googleApiKey: config["providers.google.apiKey"],
@@ -158,6 +181,7 @@ export default {
       deepseekApiKey: config["providers.deepseek.apiKey"],
       ollamaBaseUrl: config.providers_ollama_baseUrl,
       ollamaHeaders: config.providers_ollama_headers,
+      openrouterApiKey: config["providers.openrouter.apiKey"],
       openaiCompatBaseUrl: config.providers_openaiCompat_baseUrl,
       openaiCompatApiKey: config.providers_openaiCompat_apiKey,
       openaiCompatHeaders: config.providers_openaiCompat_headers,
@@ -199,6 +223,10 @@ export default {
       this.configure("providers.deepseek.apiKey", this.deepseekApiKey);
       this.$emit("change");
     },
+    openrouterApiKey() {
+      this.configure("providers.openrouter.apiKey", this.openrouterApiKey);
+      this.$emit("change");
+    },
     ollamaBaseUrl() {
       this.configure("providers_ollama_baseUrl", this.ollamaBaseUrl);
       this.$emit("change");
@@ -232,6 +260,7 @@ export default {
 
   methods: {
     ...mapActions(useConfigurationStore, ["configure"]),
+    ...mapActions(useChatStore, ["syncProvider"]),
   },
 };
 </script>

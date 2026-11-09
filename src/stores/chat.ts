@@ -3,15 +3,16 @@ import { markRaw, type Raw } from "vue";
 import type {
   AvailableModels,
   AvailableProviders,
-  AvailableProvidersWithDynamicModels,
   ModelInfo,
+  ProviderId,
 } from "@/config";
-import { providerConfigs } from "@/config";
+import { getProviderDisplayName, providerConfigs } from "@/config";
 import { useConfigurationStore } from "./configuration";
 import { useInternalDataStore } from "./internalData";
 import { useTabState } from "./tabState";
 import { createProvider } from "@/providers";
 import _ from "lodash";
+import { providerSupportsRuntimeModels } from "@/utils";
 import { ProviderSyncError } from "@/utils/ProviderSyncError";
 import {
   type ConnectionInfo,
@@ -27,8 +28,8 @@ import gt from "semver/functions/gt";
 import { getDefaultInstructions } from "@/instructions";
 
 export type Model = (AvailableModels | ModelInfo) & {
-  provider: AvailableProviders;
-  providerDisplayName: (typeof providerConfigs)[AvailableProviders]["displayName"];
+  provider: ProviderId;
+  providerDisplayName: string;
   enabled: boolean;
   /** Available if the api key is set. */
   available: boolean;
@@ -36,7 +37,7 @@ export type Model = (AvailableModels | ModelInfo) & {
 };
 
 export type ModelProvider = {
-  id: AvailableProviders;
+  id: ProviderId;
   displayName: string;
   models: Model[];
 };
@@ -74,143 +75,92 @@ export const useChatStore = defineStore("chat", {
   getters: {
     providers(): ModelProvider[] {
       const config = useConfigurationStore();
-      const openaiModels = providerConfigs.openai.models.map((m) => ({
-        ...m,
-        provider: "openai" as const,
-        providerDisplayName: providerConfigs.openai.displayName,
-        available: !!config["providers.openai.apiKey"],
-        enabled:
-          !!config["providers.openai.apiKey"] &&
-          !config.disabledModels.some(
-            (disabled) =>
-              m.id === disabled.modelId && disabled.providerId === "openai",
-          ),
-        removable: false,
-      }));
-      const anthropicModels = providerConfigs.anthropic.models.map((m) => ({
-        ...m,
-        provider: "anthropic" as const,
-        providerDisplayName: providerConfigs.anthropic.displayName,
-        available: !!config["providers.anthropic.apiKey"],
-        enabled:
-          !!config["providers.anthropic.apiKey"] &&
-          !config.disabledModels.some(
-            (disabled) =>
-              m.id === disabled.modelId && disabled.providerId === "anthropic",
-          ),
-        removable: false,
-      }));
-      const googleModels = providerConfigs.google.models.map((m) => ({
-        ...m,
-        provider: "google" as const,
-        providerDisplayName: providerConfigs.google.displayName,
-        available: !!config["providers.google.apiKey"],
-        enabled:
-          !!config["providers.google.apiKey"] &&
-          !config.disabledModels.some(
-            (disabled) =>
-              m.id === disabled.modelId && disabled.providerId === "google",
-        ),
-        removable: false,
-      }));
-      const deepseekModels = providerConfigs.deepseek.models.map((m) => ({
-        ...m,
-        provider: "deepseek" as const,
-        providerDisplayName: providerConfigs.deepseek.displayName,
-        available: !!config["providers.deepseek.apiKey"],
-        enabled:
-          !!config["providers.deepseek.apiKey"] &&
-          !config.disabledModels.some(
-            (disabled) =>
-              m.id === disabled.modelId && disabled.providerId === "deepseek",
-          ),
-        removable: false,
-      }));
-      const zaiModels = providerConfigs.zai.models.map((m) => ({
-        ...m,
-        provider: "zai" as const,
-        providerDisplayName: providerConfigs.zai.displayName,
-        available: !!config["providers.zai.apiKey"],
-        enabled:
-          !!config["providers.zai.apiKey"] &&
-          !config.disabledModels.some(
-            (disabled) =>
-              m.id === disabled.modelId && disabled.providerId === "zai",
-          ),
-        removable: false,
-      }));
-      const userDefinedModels = config.models.map((m) => ({
-        ...m,
-        provider: m.providerId,
-        providerDisplayName: providerConfigs[m.providerId].displayName,
-        available: true,
-        enabled: !config.disabledModels.some(
-          (disabled) =>
-            m.id === disabled.modelId && disabled.providerId === m.providerId,
-        ),
-        removable: false,
+
+      const isAvailable = (providerId: ProviderId): boolean => {
+        switch (providerId) {
+          // OpenAI-compatible endpoints can be keyless (local servers,
+          // open proxies).
+          case "openaiCompat":
+          case "ollama":
+          case "mock":
+            return true;
+          default:
+            if (providerId.startsWith("custom-")) {
+              return true;
+            }
+            return !!config[
+              `providers.${providerId}.apiKey` as keyof typeof config
+            ];
+        }
+      };
+
+      const modelsFor = (providerId: ProviderId): Model[] => {
+        const hardcoded: readonly ModelInfo[] =
+          (
+            providerConfigs as Record<
+              string,
+              { models: readonly ModelInfo[] }
+            >
+          )[providerId]?.models ?? [];
+        const stored = config.getModelsByProvider(providerId) ?? [];
+        // Live-fetched lists win; the bundled list is the offline/no-key
+        // fallback.
+        const source = stored.length > 0 ? stored : hardcoded;
+        const available = isAvailable(providerId);
+        return source
+          .filter(
+            (m) =>
+              !config.removedModels.some(
+                (r) => r.modelId === m.id && r.providerId === providerId,
+              ),
+          )
+          .map((m) => {
+            const fallback = hardcoded.find((h) => h.id === m.id);
+            const withExtras = m as ModelInfo;
+            return {
+              ...m,
+              contextWindow: withExtras.contextWindow ?? fallback?.contextWindow,
+              temperature:
+                (withExtras as { temperature?: number }).temperature ??
+                (fallback as { temperature?: number } | undefined)?.temperature,
+              provider: providerId,
+              providerDisplayName: getProviderDisplayName(
+                providerId,
+                config.customProviders,
+              ),
+              available,
+              enabled:
+                available &&
+                !config.disabledModels.some(
+                  (disabled) =>
+                    m.id === disabled.modelId &&
+                    disabled.providerId === providerId,
+                ),
+              removable: false,
+            } as Model;
+          });
+      };
+
+      const builtinProviders = (
+        Object.keys(providerConfigs) as AvailableProviders[]
+      )
+        .filter(
+          (provider) =>
+            import.meta.env.MODE === "development" || provider !== "mock",
+        )
+        .map((providerId) => ({
+          id: providerId as ProviderId,
+          displayName: getProviderDisplayName(providerId),
+          models: modelsFor(providerId),
+        }));
+
+      const customProviders = config.customProviders.map((cp) => ({
+        id: cp.id as ProviderId,
+        displayName: cp.name,
+        models: modelsFor(cp.id),
       }));
 
-      const mockModels = import.meta.env.MODE === "development"
-        ? providerConfigs.mock.models.map((m) => ({
-            ...m,
-            provider: "mock" as const,
-            providerDisplayName: providerConfigs.mock.displayName,
-            available: true,
-            enabled: !config.disabledModels.some(
-              (disabled) =>
-                m.id === disabled.modelId && disabled.providerId === "mock",
-            ),
-            removable: false,
-          }))
-        : [];
-
-      return [
-        {
-          id: "openai",
-          displayName: providerConfigs.openai.displayName,
-          models: openaiModels,
-        },
-        {
-          id: "anthropic",
-          displayName: providerConfigs.anthropic.displayName,
-          models: anthropicModels,
-        },
-        {
-          id: "google",
-          displayName: providerConfigs.google.displayName,
-          models: googleModels,
-        },
-        {
-          id: "zai",
-          displayName: providerConfigs.zai.displayName,
-          models: zaiModels,
-        },
-        {
-          id: "deepseek",
-          displayName: providerConfigs.deepseek.displayName,
-          models: deepseekModels,
-        },
-        {
-          id: "openaiCompat",
-          displayName: providerConfigs.openaiCompat.displayName,
-          models: userDefinedModels.filter(
-            (model) => model.provider === "openaiCompat",
-          ),
-        },
-        {
-          id: "ollama",
-          displayName: providerConfigs.ollama.displayName,
-          models: userDefinedModels.filter(
-            (model) => model.provider === "ollama",
-          ),
-        },
-        {
-          id: "mock",
-          displayName: providerConfigs.mock.displayName,
-          models: mockModels,
-        },
-      ];
+      return [...builtinProviders, ...customProviders];
     },
     models(): Model[] {
       return this.providers.flatMap((provider) => provider.models);
@@ -325,6 +275,8 @@ export const useChatStore = defineStore("chat", {
 
       this.viewContext = markRaw(await getViewContext());
 
+      await this.syncAllProviders();
+
       this.model = (
         this.models.find(
           (m) => m.id === internal.lastUsedModelId && m.enabled,
@@ -332,9 +284,6 @@ export const useChatStore = defineStore("chat", {
       ) as Model | undefined;
 
       internal.lastUsedModelId = this.model?.id;
-
-      this.syncProvider("openaiCompat");
-      this.syncProvider("ollama");
       getDefaultInstructions()
         .then((instructions) => {
           this.defaultInstructions = instructions;
@@ -361,7 +310,7 @@ export const useChatStore = defineStore("chat", {
         .catch(log.error);
     },
     /** List the models for a provider and store them in the internal data store. */
-    async syncProvider(provider: AvailableProvidersWithDynamicModels) {
+    async syncProvider(provider: ProviderId) {
       const config = useConfigurationStore();
       try {
         const errorIdx = this.errors.findIndex(
@@ -371,29 +320,11 @@ export const useChatStore = defineStore("chat", {
           this.errors.splice(errorIdx, 1);
         }
 
-        // Get old models before fetching new ones
-        const oldModels = config.getModelsByProvider(provider) || [];
-
         // Fetch new models
         const newModels = await createProvider(provider).listModels();
 
-        // Find which models are actually NEW (not in old list)
-        const newModelIds = newModels
-          .filter(
-            (newModel) => !oldModels.some((old) => old.id === newModel.id),
-          )
-          .map((m) => m.id);
-
         // Update the model list first
         await config.setModels(provider, newModels);
-
-        // Disable ONLY the new models
-        await config.disableModels(
-          newModelIds.map((modelId) => ({
-            modelId,
-            providerId: provider,
-          })),
-        );
       } catch (e) {
         if (
           provider === "ollama" &&
@@ -419,5 +350,50 @@ export const useChatStore = defineStore("chat", {
         config.setModels(provider, []);
       }
     },
+    /** Refresh the model lists of every configured provider. */
+    async syncAllProviders() {
+      const config = useConfigurationStore();
+      const providerIds: ProviderId[] = [
+        ...(Object.keys(providerConfigs) as AvailableProviders[]),
+        ...config.customProviders.map((cp) => cp.id),
+      ];
+      await Promise.allSettled(
+        providerIds
+          .filter(
+            (providerId) =>
+              providerSupportsRuntimeModels(providerId) &&
+              providerIsConfigured(providerId, config),
+          )
+          .map((providerId) => this.syncProvider(providerId)),
+      );
+    },
   },
 });
+
+/** Whether the provider has enough configuration to list/use models. */
+function providerIsConfigured(
+  providerId: ProviderId,
+  config: ReturnType<typeof useConfigurationStore>,
+): boolean {
+  switch (providerId) {
+    case "openaiCompat":
+      return !!config.providers_openaiCompat_baseUrl?.trim();
+    case "ollama":
+      return !!config.providers_ollama_baseUrl?.trim();
+    case "mock":
+      return import.meta.env.MODE === "development";
+    case "openrouter":
+      // The OpenRouter model catalog is public, so the picker can show the
+      // available models before an API key is entered.
+      return true;
+    default:
+      if (providerId.startsWith("custom-")) {
+        return !!config.customProviders
+          .find((cp) => cp.id === providerId)
+          ?.baseUrl?.trim();
+      }
+      return !!config[
+        `providers.${providerId}.apiKey` as keyof typeof config
+      ];
+  }
+}

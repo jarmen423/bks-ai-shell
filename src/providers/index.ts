@@ -1,8 +1,9 @@
-import type { AvailableProviders } from "@/config";
+import type { ProviderId } from "@/config";
 import { AnthropicProvider } from "@/providers/AnthropicProvider";
 import { DeepSeekProvider } from "@/providers/DeepSeekProvider";
 import { OpenAIProvider } from "@/providers/OpenAIProvider";
 import { OpenAICompatibleProvider } from "@/providers/OpenAICompatibleProvider";
+import { OpenRouterProvider } from "@/providers/OpenRouterProvider";
 import { GoogleProvider } from "@/providers/GoogleProvider";
 import { ZaiProvider } from "@/providers/ZaiProvider";
 import { useConfigurationStore } from "@/stores/configuration";
@@ -11,7 +12,7 @@ import { MockProvider } from "@/providers/MockProvider";
 import { parseHeaders } from "@/utils";
 import _ from "lodash";
 
-export function createProvider(id: AvailableProviders)  {
+export function createProvider(id: ProviderId)  {
   const configuration = useConfigurationStore();
   switch (id) {
     case "anthropic":
@@ -33,6 +34,10 @@ export function createProvider(id: AvailableProviders)  {
     case "deepseek":
       return new DeepSeekProvider({
         apiKey: configuration["providers.deepseek.apiKey"],
+      });
+    case "openrouter":
+      return new OpenRouterProvider({
+        apiKey: configuration["providers.openrouter.apiKey"],
       });
     case "openaiCompat":
       if (_.isEmpty(configuration.providers_openaiCompat_baseUrl)) {
@@ -56,7 +61,21 @@ export function createProvider(id: AvailableProviders)  {
         throw new Error("Mock provider is only available in development mode");
       }
       return new MockProvider();
-    default:
+    default: {
+      const custom = configuration.customProviders.find((cp) => cp.id === id);
+      if (custom) {
+        if (_.isEmpty(custom.baseUrl)) {
+          throw new Error("Missing API base URL [2]");
+        }
+        return new OpenAICompatibleProvider({
+          providerId: custom.id,
+          baseURL: custom.baseUrl,
+          apiKey: configuration.customProviderApiKeys[custom.id] ?? "",
+          headers: parseHeaders(custom.headers),
+          name: custom.name,
+        });
+      }
       throw new Error(`Provider ${id} does not exist.`);
+    }
   }
 }

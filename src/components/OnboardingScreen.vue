@@ -72,6 +72,10 @@ export default {
 
 <style scoped>
 .onboarding-screen {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 0.5rem;
+
   h1 {
     font-size: 1.25rem;
     color: var(--text-dark);
