@@ -1,7 +1,7 @@
 {
   "id": "ai-shell-jf",
   "name": "AI Shell (JF fork)",
-  "version": "3.3.2",
+  "version": "3.4.1",
   "minAppVersion": "5.4.0",
   "description": "Ask AI to analyze your database and generate SQL queries.",
   "author": {
