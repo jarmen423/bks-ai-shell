@@ -4,7 +4,7 @@ import type {
   ToolUIPart as AIToolUIPart,
 } from "ai";
 import { tools } from "./tools";
-import type { AvailableProviders } from "./config";
+import type { ProviderId } from "./config";
 import z from "zod";
 
 export type UIDataTypes = {
@@ -53,7 +53,7 @@ const usageSchema = z.object({
 
 export const messageMetadataSchema = z.object({
   createdAt: z.number().optional(),
-  providerId: z.custom<AvailableProviders>().optional(),
+  providerId: z.custom<ProviderId>().optional(),
   modelId: z.string().optional(),
   usage: usageSchema.optional(),
   compactStatus: z

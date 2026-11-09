@@ -116,6 +116,9 @@ export function isEmptyUIMessage(message: UIMessage): boolean {
 export function providerSupportsRuntimeModels(
   provider: string,
 ): provider is AvailableProvidersWithDynamicModels {
+  if (provider.startsWith("custom-")) {
+    return true;
+  }
   return (
     providerConfigs[provider as AvailableProviders]?.supportsRuntimeModels ??
     false

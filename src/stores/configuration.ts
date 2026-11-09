@@ -11,13 +11,12 @@
  */
 import { defineStore } from "pinia";
 import _ from "lodash";
-import {
-  getData,
-  getEncryptedData,
-  setData,
-  setEncryptedData,
-} from "@beekeeperstudio/plugin";
-import type { AvailableProviders } from "@/config";
+import { appStorage } from "@beekeeperstudio/plugin";
+import type {
+  AvailableProviders,
+  CustomProviderConfig,
+  ProviderId,
+} from "@/config";
 import { disabledModelsByDefault, providerConfigs } from "@/config";
 import { useChatStore } from "./chat";
 
@@ -42,13 +41,18 @@ type Configurable = {
 
   // ==== MODELS ====
   /** List of disabled models by id. */
-  disabledModels: { providerId: AvailableProviders; modelId: string }[];
+  disabledModels: { providerId: ProviderId; modelId: string }[];
   /** Models that are removed are not shown in the UI and cannot be enabled. */
-  removedModels: { providerId: AvailableProviders; modelId: string }[];
+  removedModels: { providerId: ProviderId; modelId: string }[];
   providers_openaiCompat_baseUrl: string;
   providers_openaiCompat_headers: string;
   providers_ollama_baseUrl: string;
   providers_ollama_headers: string;
+
+  /** User-registered OpenAI-compatible endpoints (name, url, headers). */
+  customProviders: CustomProviderConfig[];
+  /** Runtime-fetched model lists keyed by custom provider id. */
+  customProviderModels: Record<string, Model[]>;
 } & {
   // User defined models
   [K in AvailableProviders as `providers_${K}_models`]: Model[];
@@ -60,7 +64,10 @@ type EncryptedConfigurable = {
   "providers.google.apiKey": string;
   "providers.zai.apiKey": string;
   "providers.deepseek.apiKey": string;
+  "providers.openrouter.apiKey": string;
   providers_openaiCompat_apiKey: string;
+  /** API keys keyed by custom provider id. */
+  customProviderApiKeys: Record<string, string>;
 };
 
 type ConfigurationState = Configurable & EncryptedConfigurable;
@@ -73,7 +80,9 @@ const encryptedConfigKeys: (keyof EncryptedConfigurable)[] = [
   "providers.google.apiKey",
   "providers.zai.apiKey",
   "providers.deepseek.apiKey",
+  "providers.openrouter.apiKey",
   "providers_openaiCompat_apiKey",
+  "customProviderApiKeys",
 ];
 
 const defaultConfiguration: ConfigurationState = {
@@ -89,16 +98,21 @@ const defaultConfiguration: ConfigurationState = {
   "providers.google.apiKey": "",
   "providers.zai.apiKey": "",
   "providers.deepseek.apiKey": "",
+  "providers.openrouter.apiKey": "",
   providers_openaiCompat_baseUrl: "https://api.meta.ai/v1",
   providers_openaiCompat_apiKey: "",
   providers_openaiCompat_headers: "",
   providers_ollama_baseUrl: "http://localhost:11434",
   providers_ollama_headers: "",
+  customProviders: [],
+  customProviderModels: {},
+  customProviderApiKeys: {},
   providers_openai_models: [],
   providers_anthropic_models: [],
   providers_google_models: [],
   providers_zai_models: [],
   providers_deepseek_models: [],
+  providers_openrouter_models: [],
   providers_openaiCompat_models: [],
   providers_ollama_models: [],
   providers_mock_models: [],
@@ -119,22 +133,38 @@ export const useConfigurationStore = defineStore("configuration", {
 
   getters: {
     apiKeyExists(): boolean {
-      return encryptedConfigKeys.some((key) => this[key].trim() !== "");
+      return (
+        encryptedConfigKeys.some(
+          (key) =>
+            typeof this[key] === "string" &&
+            (this[key] as string).trim() !== "",
+        ) ||
+        Object.values(this.customProviderApiKeys).some(
+          (key) => key.trim() !== "",
+        )
+      );
     },
 
     getModelsByProvider: (state) => {
-      return (provider: AvailableProviders) => {
-        return state[`providers_${provider}_models`];
+      return (provider: ProviderId) => {
+        if (provider.startsWith("custom-")) {
+          return state.customProviderModels[provider] ?? [];
+        }
+        return (state as unknown as Record<string, Model[]>)[
+          `providers_${provider}_models`
+        ] ?? [];
       };
     },
 
     /** Models that are not defined in the config. */
-    models(state): (Model & { providerId: AvailableProviders })[] {
+    models(state): (Model & { providerId: ProviderId })[] {
       const availableProviders = Object.keys(
         providerConfigs,
       ) as AvailableProviders[];
-      return availableProviders.flatMap((providerId) => {
-        const models = state[`providers_${providerId}_models`];
+      const builtinModels = availableProviders.flatMap((providerId) => {
+        const models = (state as unknown as Record<string, Model[]>)[
+          `providers_${providerId}_models`
+        ];
         if (!models) {
           return [];
         }
@@ -148,6 +178,17 @@ export const useConfigurationStore = defineStore("configuration", {
           )
           .map((model) => ({ ...model, providerId }));
       });
+      const customModels = state.customProviders.flatMap((cp) =>
+        (state.customProviderModels[cp.id] ?? [])
+          .filter(
+            (model) =>
+              !state.removedModels.some(
+                (m) => m.modelId === model.id && m.providerId === cp.id,
+              ),
+          )
+          .map((model) => ({ ...model, providerId: cp.id as ProviderId })),
+      );
+      return [...builtinModels, ...customModels];
     },
 
     currentConnectionInstructions(state): string {
@@ -165,9 +206,9 @@ export const useConfigurationStore = defineStore("configuration", {
     async sync() {
       const configuration: Record<string, unknown> = {};
       for (const key in defaultConfiguration) {
-        const value = isEncryptedConfig(key)
-          ? await getEncryptedData(key)
-          : await getData(key);
+        const value = await appStorage.getItem(key, {
+          encrypted: isEncryptedConfig(key),
+        });
 
         if (value === null) {
           continue;
@@ -184,34 +225,128 @@ export const useConfigurationStore = defineStore("configuration", {
     ) {
       this.$patch({ [config]: value });
 
-      if (isEncryptedConfig(config)) {
-        await setEncryptedData(config, value);
-      } else {
-        await setData(config, value);
-      }
+      await appStorage.setItem(config, value, {
+        encrypted: isEncryptedConfig(config),
+      });
     },
 
-    async setModels(providerId: AvailableProviders, models: Model[]) {
-      await this.configure(`providers_${providerId}_models`, models);
+    async setModels(providerId: ProviderId, models: Model[]) {
+      if (providerId.startsWith("custom-")) {
+        await this.configure(
+          "customProviderModels",
+          _.cloneDeep({
+            ...this.customProviderModels,
+            [providerId]: models,
+          }),
+        );
+        return;
+      }
+      await this.configure(
+        `providers_${providerId}_models` as keyof Configurable,
+        models as never,
+      );
+    },
+
+    async addCustomProvider(options: {
+      name: string;
+      baseUrl: string;
+      headers?: string;
+    }): Promise<CustomProviderConfig> {
+      const slug =
+        options.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "endpoint";
+      const provider: CustomProviderConfig = {
+        id: `custom-${slug}-${Math.random().toString(36).slice(2, 8)}`,
+        name: options.name,
+        baseUrl: options.baseUrl,
+        headers: options.headers ?? "",
+      };
+      await this.configure(
+        "customProviders",
+        _.cloneDeep([...this.customProviders, provider]),
+      );
+      return provider;
+    },
+
+    async updateCustomProvider(
+      providerId: `custom-${string}`,
+      patch: Partial<Omit<CustomProviderConfig, "id">>,
+    ) {
+      await this.configure(
+        "customProviders",
+        _.cloneDeep(
+          this.customProviders.map((cp) =>
+            cp.id === providerId ? { ...cp, ...patch } : cp,
+          ),
+        ),
+      );
+    },
+
+    async removeCustomProvider(providerId: `custom-${string}`) {
+      await this.configure(
+        "customProviders",
+        _.cloneDeep(this.customProviders.filter((cp) => cp.id !== providerId)),
+      );
+      const customProviderModels = _.omit(this.customProviderModels, [
+        providerId,
+      ]);
+      const customProviderApiKeys = _.omit(this.customProviderApiKeys, [
+        providerId,
+      ]);
+      await this.configure(
+        "customProviderModels",
+        _.cloneDeep(customProviderModels),
+      );
+      await this.configure(
+        "customProviderApiKeys",
+        _.cloneDeep(customProviderApiKeys),
+      );
+      // cloneDeep: store entries are reactive proxies the host's
+      // postMessage structured-clone cannot serialize
+      await this.configure(
+        "disabledModels",
+        _.cloneDeep(this.disabledModels.filter((m) => m.providerId !== providerId)),
+      );
+      await this.configure(
+        "removedModels",
+        _.cloneDeep(this.removedModels.filter((m) => m.providerId !== providerId)),
+      );
+    },
+
+    async setCustomProviderApiKey(
+      providerId: `custom-${string}`,
+      apiKey: string,
+    ) {
+      await this.configure(
+        "customProviderApiKeys",
+        _.cloneDeep({
+          ...this.customProviderApiKeys,
+          [providerId]: apiKey,
+        }),
+      );
     },
 
     async addModel(options: {
-      providerId: AvailableProviders;
+      providerId: ProviderId;
       modelId: string;
       displayName: string;
     }) {
-      const models = _.cloneDeep(this.getModelsByProvider(options.providerId));
+      const models = _.cloneDeep(
+        this.getModelsByProvider(options.providerId) ?? [],
+      );
       models.push({ id: options.modelId, displayName: options.displayName });
       await this.setModels(options.providerId, models);
     },
 
-    async removeModel(providerId: AvailableProviders, modelId: string) {
+    async removeModel(providerId: ProviderId, modelId: string) {
       const removedModels = _.cloneDeep(this.removedModels);
       removedModels.push({ providerId, modelId });
       await this.configure("removedModels", removedModels);
     },
 
-    async disableModel(providerId: AvailableProviders, modelId: string) {
+    async disableModel(providerId: ProviderId, modelId: string) {
       if (
         this.disabledModels.find(
           (m) => m.providerId === providerId && m.modelId === modelId,
@@ -226,7 +361,7 @@ export const useConfigurationStore = defineStore("configuration", {
     },
 
     async disableModels(
-      models: { providerId: AvailableProviders; modelId: string }[],
+      models: { providerId: ProviderId; modelId: string }[],
     ) {
       const map = new Map<string, (typeof models)[number]>();
 
@@ -243,7 +378,7 @@ export const useConfigurationStore = defineStore("configuration", {
       await this.configure("disabledModels", [...map.values()]);
     },
 
-    async enableModel(providerId: AvailableProviders, modelId: string) {
+    async enableModel(providerId: ProviderId, modelId: string) {
       const disabledModels = _.cloneDeep(this.disabledModels);
       const idx = disabledModels.findIndex(
         (m) => m.providerId === providerId && m.modelId === modelId,

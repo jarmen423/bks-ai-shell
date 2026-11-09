@@ -2,6 +2,18 @@ export const defaultTemperature = 0.7;
 
 export type AvailableProviders = keyof typeof providerConfigs;
 
+/** Custom OpenAI-compatible endpoints get ids like `custom-<slug>-<rand>`. */
+export type ProviderId = AvailableProviders | `custom-${string}`;
+
+export type CustomProviderConfig = {
+  id: `custom-${string}`;
+  /** User-facing name shown in the model picker and provider filter. */
+  name: string;
+  baseUrl: string;
+  /** One `Header-Name: value` per line, same format as the built-in slot. */
+  headers: string;
+};
+
 export type AvailableProvidersWithDynamicModels = {
   [K in keyof typeof providerConfigs]: 'supportsRuntimeModels' extends keyof typeof providerConfigs[K]
     ? typeof providerConfigs[K]['supportsRuntimeModels'] extends true
@@ -9,6 +21,22 @@ export type AvailableProvidersWithDynamicModels = {
       : never
     : never;
 }[keyof typeof providerConfigs];
+
+/** Display name for any provider id, including runtime-registered custom endpoints. */
+export function getProviderDisplayName(
+  providerId: ProviderId,
+  customProviders: CustomProviderConfig[] = [],
+): string {
+  const builtin = (providerConfigs as Record<string, { displayName: string }>)[
+    providerId as string
+  ];
+  if (builtin) {
+    return builtin.displayName;
+  }
+  return (
+    customProviders.find((cp) => cp.id === providerId)?.name ?? providerId
+  );
+}
 
 export type AvailableModels<T extends AvailableProviders | unknown = unknown> =
   T extends AvailableProviders
@@ -26,6 +54,30 @@ export const providerConfigs = {
     displayName: "Anthropic",
     /** @link https://docs.anthropic.com/en/docs/about-claude/models/overview */
     models: [
+      {
+        id: 'claude-haiku-5-5',
+        displayName: 'claude-haiku-5-5',
+        contextWindow: 1_000_000,
+        temperature: 1,
+      },
+      {
+        id: 'claude-sonnet-5-5',
+        displayName: 'claude-sonnet-5-5',
+        contextWindow: 1_000_000,
+        temperature: 1,
+      },
+      {
+        id: 'claude-opus-5-5',
+        displayName: 'claude-opus-5-5',
+        contextWindow: 1_000_000,
+        temperature: 1,
+      },
+      {
+        id: 'claude-fable-5-1',
+        displayName: 'claude-fable-5-1',
+        contextWindow: 1_000_000,
+        temperature: 1,
+      },
       {
         id: 'claude-fable-5',
         displayName: 'claude-fable-5',
@@ -87,12 +139,25 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
     ],
-    supportsRuntimeModels: false,
+    /** Fallback list; the live model list is fetched from the Anthropic API. */
+    supportsRuntimeModels: true,
   },
   google: {
     displayName: "Google",
     /** @link https://ai.google.dev/gemini-api/docs/models */
     models: [
+      {
+        id: "gemini-4-argon",
+        displayName: "gemini-4-argon",
+        contextWindow: 1_048_576,
+        temperature: defaultTemperature,
+      },
+      {
+        id: "gemini-3.8-flash",
+        displayName: "gemini-3.8-flash",
+        contextWindow: 1_048_576,
+        temperature: defaultTemperature,
+      },
       {
         id: "gemini-3.7-flash",
         displayName: "gemini-3.7-flash",
@@ -154,7 +219,8 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
     ],
-    supportsRuntimeModels: false,
+    /** Fallback list; the live model list is fetched from the Gemini API. */
+    supportsRuntimeModels: true,
   },
   zai: {
     displayName: "Z.AI (GLM)",
@@ -209,12 +275,43 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
     ],
-    supportsRuntimeModels: false,
+    /** Fallback list; the live model list is fetched from the Z.AI API. */
+    supportsRuntimeModels: true,
   },
   openai: {
     displayName: "OpenAI",
     /** @link https://platform.openai.com/docs/models */
     models: [
+      {
+        id: "gpt-6.1-sol",
+        displayName: "gpt-6.1-sol",
+        contextWindow: 1_050_000,
+        temperature: 1,
+      },
+      {
+        id: "gpt-6.1-terra",
+        displayName: "gpt-6.1-terra",
+        contextWindow: 1_050_000,
+        temperature: 1,
+      },
+      {
+        id: "gpt-6-astra",
+        displayName: "gpt-6-astra",
+        contextWindow: 1_050_000,
+        temperature: 1,
+      },
+      {
+        id: "gpt-6-sol",
+        displayName: "gpt-6-sol",
+        contextWindow: 1_050_000,
+        temperature: 1,
+      },
+      {
+        id: "gpt-6-luna",
+        displayName: "gpt-6-luna",
+        contextWindow: 1_050_000,
+        temperature: 1,
+      },
       {
         id: "gpt-5.6-sol",
         displayName: "gpt-5.6-sol",
@@ -324,12 +421,6 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
       {
-        id: "gpt-4.1-nano",
-        displayName: "gpt-4.1-nano",
-        contextWindow: 1_047_576,
-        temperature: defaultTemperature,
-      },
-      {
         id: "gpt-4o-mini",
         displayName: "gpt-4o-mini",
         contextWindow: 128_000,
@@ -342,19 +433,14 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
       {
-        id: "o3-mini",
-        displayName: "o3-mini",
-        contextWindow: 200_000,
-        temperature: defaultTemperature,
-      },
-      {
-        id: "o4-mini",
-        displayName: "o4-mini",
+        id: "o3-pro",
+        displayName: "o3-pro",
         contextWindow: 200_000,
         temperature: defaultTemperature,
       },
     ],
-    supportsRuntimeModels: false,
+    /** Fallback list; the live model list is fetched from the OpenAI API. */
+    supportsRuntimeModels: true,
   },
   deepseek: {
     displayName: "DeepSeek",
@@ -373,7 +459,14 @@ export const providerConfigs = {
         temperature: defaultTemperature,
       },
     ],
-    supportsRuntimeModels: false,
+    /** Fallback list; the live model list is fetched from the DeepSeek API. */
+    supportsRuntimeModels: true,
+  },
+  openrouter: {
+    displayName: "OpenRouter",
+    /** Models are fetched at runtime from https://openrouter.ai/api/v1/models */
+    models: [],
+    supportsRuntimeModels: true,
   },
   openaiCompat: {
     displayName: "OpenAI-Compatible",

@@ -75,6 +75,74 @@
       <template #helper>Ollama server URL.</template>
     </BaseInput>
   </form>
+
+  <form
+    @submit.prevent
+    class="config-form"
+    v-for="cp in customProviders"
+    :key="cp.id"
+  >
+    <div class="custom-provider-header">
+      <h3>{{ cp.name || "Custom endpoint" }}</h3>
+      <button
+        type="button"
+        class="btn btn-flat delete-btn"
+        @click="removeCustomProvider(cp.id)"
+        v-tooltip="'Remove this endpoint'"
+      >
+        <span class="material-symbols-outlined">delete</span>
+      </button>
+    </div>
+    <div
+      v-for="(error, index) in customProviderErrors(cp.id)"
+      :key="index"
+      class="alert alert-danger"
+    >
+      <span class="material-symbols-outlined">error_outline</span>
+      <span>{{ error }}</span>
+    </div>
+    <BaseInput
+      :model-value="cp.name"
+      @update:modelValue="updateCustomProvider(cp.id, { name: $event })"
+    >
+      <template #label>Name</template>
+    </BaseInput>
+    <BaseInput
+      :model-value="cp.baseUrl"
+      @update:modelValue="updateCustomProvider(cp.id, { baseUrl: $event })"
+      @change="handleChange($event, cp.id)"
+    >
+      <template #label>URL</template>
+      <template #helper>
+        Base URL for an API service that implements the OpenAI API format.
+      </template>
+    </BaseInput>
+    <BaseInput
+      type="password"
+      :model-value="customProviderApiKeys[cp.id] ?? ''"
+      @update:modelValue="setCustomProviderApiKey(cp.id, $event)"
+      @change="handleChange($event, cp.id)"
+    >
+      <template #label>API Key</template>
+    </BaseInput>
+    <BaseInput
+      type="textarea"
+      :model-value="cp.headers"
+      @update:modelValue="updateCustomProvider(cp.id, { headers: $event })"
+      @change="handleChange($event, cp.id)"
+    >
+      <template #label>Headers</template>
+    </BaseInput>
+  </form>
+
+  <button
+    type="button"
+    class="btn btn-flat add-endpoint-btn"
+    @click="addEndpoint()"
+  >
+    <span class="material-symbols-outlined">add</span>
+    Add OpenAI-compatible endpoint
+  </button>
 </template>
 
 <script lang="ts">
@@ -84,7 +152,7 @@ import BaseInput from "@/components/common/BaseInput.vue";
 import ToggleFormArea from "../common/ToggleFormArea.vue";
 import { useConfigurationStore } from "@/stores/configuration";
 import { mapState, mapActions } from "pinia";
-import type { AvailableProvidersWithDynamicModels } from "@/config";
+import type { ProviderId } from "@/config";
 import { useChatStore } from "@/stores/chat";
 import ExternalLink from "../common/ExternalLink.vue";
 
@@ -106,6 +174,8 @@ export default {
       "providers_openaiCompat_headers",
       "providers_ollama_baseUrl",
       "providers_ollama_headers",
+      "customProviders",
+      "customProviderApiKeys",
     ]),
     ...mapState(useChatStore, ["errors"]),
     openAiCompatibleErrors() {
@@ -128,10 +198,32 @@ export default {
   },
 
   methods: {
-    ...mapActions(useConfigurationStore, ["configure"]),
+    ...mapActions(useConfigurationStore, [
+      "configure",
+      "addCustomProvider",
+      "updateCustomProvider",
+      "removeCustomProvider",
+      "setCustomProviderApiKey",
+    ]),
     ...mapActions(useChatStore, ["syncProvider"]),
-    handleChange(_event: Event, provider: AvailableProvidersWithDynamicModels) {
+    handleChange(_event: Event, provider: ProviderId) {
       this.syncProvider(provider);
+    },
+    customProviderErrors(providerId: ProviderId) {
+      return this.errors
+        .filter(
+          (error) =>
+            error.providerId === providerId &&
+            !error.message.includes("[2]"),
+        )
+        .map((error) => error.message);
+    },
+    async addEndpoint() {
+      const provider = await this.addCustomProvider({
+        name: "Custom endpoint",
+        baseUrl: "",
+      });
+      this.$nextTick(() => this.syncProvider(provider.id));
     },
   },
 };
@@ -140,6 +232,20 @@ export default {
 <style scoped>
 h2 {
   margin-top: 2rem;
+}
+
+.custom-provider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  h3 {
+    margin: 0;
+  }
+}
+
+.add-endpoint-btn {
+  margin-top: 1rem;
 }
 
 .config-form {

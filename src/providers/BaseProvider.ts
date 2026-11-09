@@ -8,9 +8,8 @@ import {
   type ToolSet,
 } from "ai";
 import type {
-  AvailableModels,
-  AvailableProviders,
   ModelInfo,
+  ProviderId,
 } from "@/config";
 import { defaultTemperature, providerConfigs } from "@/config";
 import type { UIMessage } from "@/types";
@@ -31,13 +30,13 @@ export type StreamOptions = {
   messages: Messages;
   signal?: AbortSignal;
   tools: ToolSet;
-  modelId: AvailableModels["id"];
+  modelId: string;
   temperature?: number;
   systemPrompt?: string;
 };
 
 export abstract class BaseProvider {
-  abstract get providerId(): AvailableProviders;
+  abstract get providerId(): ProviderId;
 
   abstract getModel(id: string): LanguageModel;
 
@@ -48,9 +47,12 @@ export abstract class BaseProvider {
   async stream(options: StreamOptions) {
     const isCompactPrompt =
       options.messages[options.messages.length - 1]?.metadata?.isCompactPrompt;
-    const config = providerConfigs[this.providerId]
-      .models
-      .find((m) => m.id === options.modelId);
+    const config = (
+      providerConfigs as Record<
+        string,
+        { models: readonly { id: string; temperature?: number }[] }
+      >
+    )[this.providerId]?.models?.find((m) => m.id === options.modelId);
     const result = streamText({
       model: this.getModel(options.modelId),
       messages: await this.convertToModelMessages(options.messages),

@@ -106,7 +106,8 @@ import { clipboard } from "@beekeeperstudio/plugin";
 import { isEmptyUIMessage } from "@/utils";
 import type { UIMessage } from "@/types";
 import Popover from "primevue/popover";
-import { providerConfigs } from "@/config";
+import { getProviderDisplayName, providerConfigs } from "@/config";
+import { useConfigurationStore } from "@/stores/configuration";
 
 type PopoverInstance = InstanceType<typeof Popover>;
 
@@ -168,11 +169,27 @@ export default {
       }
 
       const { providerId, modelId, usage } = this.message.metadata;
-      const providerObj = providerId ? providerConfigs[providerId] : undefined;
+      const providerObj = providerId
+        ? (providerConfigs as unknown as Record<
+            string,
+            {
+              displayName?: string;
+              models?: readonly { id: string; displayName?: string }[];
+            }
+          >)[providerId]
+        : undefined;
 
-      const provider = providerObj?.displayName ?? "-";
+      const config = useConfigurationStore();
+      const provider = providerId
+        ? getProviderDisplayName(providerId, config.customProviders)
+        : "-";
       const model =
-        providerObj?.models.find((m) => m.id === modelId)?.displayName ??
+        providerObj?.models?.find((m) => m.id === modelId)?.displayName ??
+        (providerId
+          ? config
+              .getModelsByProvider(providerId)
+              .find((m) => m.id === modelId)?.displayName
+          : undefined) ??
         modelId ??
         "-";
       const totalTokens =
